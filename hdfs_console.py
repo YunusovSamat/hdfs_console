@@ -1,69 +1,68 @@
 import requests
-import json
 
 
 class HDFSConsole:
     def __init__(self, protocol='http', host='localhost',
                  port='50070', user='dr.who'):
         self._url = (protocol + '://' + host + ':' + port
-                     + '/webhdfs/v1/')
+                     + '/webhdfs/v1')
         self._user = user
-        self._hdfs_path = ''
+        self._hdfs_path = ['user', 'samat']
         self._params = {'user.name': self._user, 'op': ''}
 
-    def http_request(self, method, path=''):
-        temp_path = self._hdfs_path
-        for block in path.split('/'):
-            if (block == '') or (block == '.'):
+    def make_paths(self, path):
+        full_list_path = list() if path[0] == '/' else self._hdfs_path.copy()
+        list_path = tuple(filter(None, path.split('/')))
+        for block in list_path:
+            if block == '.':
                 pass
             elif block == '..':
-                temp_path = temp_path.rpartition('/')[0]
+                if full_list_path:
+                    full_list_path.pop()
             else:
-                temp_path += block + '/'
-        response = requests.request(method, self._url + temp_path,
-                                    params=self._params)
-        return response
+                full_list_path.append(block)
+        return full_list_path
 
-    def operation_processing(self, op, extra_path):
+    def http_request(self, method, full_path):
+        return requests.request(
+                    method, self._url + full_path,
+                    params=self._params)
+
+    def operation_processing(self, op, cmd_path):
         if op == 'mkdir':
             self._params['op'] = 'MKDIRS'
-            for path in extra_path.split():
-                result = self.http_request('PUT', path)
-                if result.reason == 'OK':
-                    print('Successfully created directory')
+            for path in cmd_path.split():
+                full_path = '/' + '/'.join(self.make_paths(path))
+                response = self.http_request('PUT', full_path)
+                if response.reason == 'OK':
+                    if response.json()['boolean']:
+                        print('Created', full_path)
+                    else:
+                        print('No created', full_path)
                 else:
-                    print('No created directory')
-        elif op == 'put':
-            self._params['op'] = 'CREATE'
-            self.http_request('PUT')
-        elif op == 'get':
-            self._params['op'] = 'OPEN'
-            self.http_request('GET')
-        elif op == 'append':
-            self._params['op'] = 'APPEND'
-            self.http_request('POST')
+                    print(response.reason)
         elif op == 'delete':
             self._params['op'] = 'DELETE'
-            for path in extra_path.split():
-                result = self.http_request('DELETE', path)
-                if result.reason == 'OK':
-                    print('Successfully deleted')
+            for path in cmd_path.split():
+                full_path = '/' + '/'.join(self.make_paths(path))
+                response = self.http_request('DELETE', full_path)
+                if response.reason == 'OK':
+                    if response.json()['boolean']:
+                        print('Deleted', full_path)
+                    else:
+                        print('Not found', full_path)
                 else:
-                    print('No deleted')
-        elif op == 'ls':
-            self._params['op'] = 'LISTSTATUS'
-            
-        elif op == 'cd':
-            pass
-        elif op == 'lls':
-            pass
-        elif op == 'lcd':
-            pass
+                    print(response.reason)
+                    print('No deleted', full_path)
         else:
             print('Command not found')
             return
 
+    def get_pwd(self):
+        return self._hdfs_path
+
 
 if __name__ == '__main__':
-    hdfs = HDFSConsole(user='samat')
-    hdfs.operation_processing('ls', '')
+    hdfs_console = HDFSConsole(user='samat')
+    hdfs_console.operation_processing('mkdir', '/dir1')
+    # print(hdfs_console.get_pwd())
