@@ -34,26 +34,55 @@ class HDFSConsole:
             for path in cmd_path.split():
                 full_path = '/' + '/'.join(self.make_paths(path))
                 response = self.http_request('PUT', full_path)
+                print(full_path, ':', sep='')
                 if response.reason == 'OK':
                     if response.json()['boolean']:
-                        print('Created', full_path)
+                        print('\tCreated')
                     else:
-                        print('No created', full_path)
+                        print('\tNo created')
                 else:
-                    print(response.reason)
+                    print('\t', response.reason, sep='')
         elif op == 'delete':
             self._params['op'] = 'DELETE'
             for path in cmd_path.split():
                 full_path = '/' + '/'.join(self.make_paths(path))
                 response = self.http_request('DELETE', full_path)
+                print(full_path, ':', sep='')
                 if response.reason == 'OK':
                     if response.json()['boolean']:
-                        print('Deleted', full_path)
+                        print('\tDeleted')
                     else:
-                        print('Not found', full_path)
+                        print('\tNot found')
+                else:
+                    print('\t', response.reason, sep='')
+                    print('\tNo deleted')
+        elif op == 'ls':
+            self._params['op'] = 'LISTSTATUS'
+            cmd_path = cmd_path if cmd_path else '.'
+            for path in cmd_path.split():
+                full_path = '/' + '/'.join(self.make_paths(path))
+                response = self.http_request('GET', full_path)
+                print(full_path, ':', sep='')
+                if response.reason == 'OK':
+                    for file_status in response.json()['FileStatuses']['FileStatus']:
+                        print('\t', file_status['pathSuffix'], sep='')
                 else:
                     print(response.reason)
-                    print('No deleted', full_path)
+        elif op == 'cd':
+            self._params['op'] = 'GETFILESTATUS'
+            if len(cmd_path.split()) == 1:
+                full_path = '/' + '/'.join(self.make_paths(cmd_path))
+                response = self.http_request('GET', full_path)
+                if response.reason == 'OK':
+                    if response.json()['FileStatus']['type'] == 'DIRECTORY':
+                        self._hdfs_path = tuple(filter(None, full_path.split('/')))
+                        print(full_path)
+                    else:
+                        print("This is not directory")
+                else:
+                    print(response.reason)
+            else:
+                print('The number of arguments is not one')
         else:
             print('Command not found')
             return
@@ -64,5 +93,5 @@ class HDFSConsole:
 
 if __name__ == '__main__':
     hdfs_console = HDFSConsole(user='samat')
-    hdfs_console.operation_processing('mkdir', '/dir1')
+    hdfs_console.operation_processing('cd', '/user/samat/dir1/')
     # print(hdfs_console.get_pwd())
