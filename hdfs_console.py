@@ -1,3 +1,4 @@
+import os
 import requests
 
 
@@ -8,10 +9,11 @@ class HDFSConsole:
                      + '/webhdfs/v1')
         self._user = user
         self._hdfs_path = ['user', 'samat']
+        os.chdir('/home/samat')
         self._params = {'user.name': self._user, 'op': ''}
 
     def make_paths(self, path):
-        full_list_path = list() if path[0] == '/' else self._hdfs_path.copy()
+        full_list_path = list() if path[0] == '/' else self._hdfs_path[:]
         list_path = tuple(filter(None, path.split('/')))
         for block in list_path:
             if block == '.':
@@ -23,17 +25,19 @@ class HDFSConsole:
                 full_list_path.append(block)
         return full_list_path
 
-    def http_request(self, method, full_path):
-        return requests.request(
-                    method, self._url + full_path,
-                    params=self._params)
+    def http_request(self, method, path, data=None):
+        full_path = '/' + '/'.join(self.make_paths(path))
+        return requests.request(method, self._url + full_path,
+                                params=self._params, data=data), full_path
 
-    def operation_processing(self, op, cmd_path):
+    def command_processing(self, op, cmd_list_paths):
         if op == 'mkdir':
+            if not len(cmd_list_paths):
+                print('The number of arguments is less than one')
+                return
             self._params['op'] = 'MKDIRS'
-            for path in cmd_path.split():
-                full_path = '/' + '/'.join(self.make_paths(path))
-                response = self.http_request('PUT', full_path)
+            for path in cmd_list_paths:
+                response, full_path = self.http_request('PUT', path)
                 print(full_path, ':', sep='')
                 if response.reason == 'OK':
                     if response.json()['boolean']:
@@ -42,11 +46,15 @@ class HDFSConsole:
                         print('\tNo created')
                 else:
                     print('\t', response.reason, sep='')
+        
+
         elif op == 'delete':
+            if not len(cmd_list_paths):
+                print('The number of arguments is less than one')
+                return
             self._params['op'] = 'DELETE'
-            for path in cmd_path.split():
-                full_path = '/' + '/'.join(self.make_paths(path))
-                response = self.http_request('DELETE', full_path)
+            for path in cmd_list_paths:
+                response, full_path = self.http_request('DELETE', path)
                 print(full_path, ':', sep='')
                 if response.reason == 'OK':
                     if response.json()['boolean']:
@@ -58,21 +66,19 @@ class HDFSConsole:
                     print('\tNo deleted')
         elif op == 'ls':
             self._params['op'] = 'LISTSTATUS'
-            cmd_path = cmd_path if cmd_path else '.'
-            for path in cmd_path.split():
-                full_path = '/' + '/'.join(self.make_paths(path))
-                response = self.http_request('GET', full_path)
+            cmd_list_paths = cmd_list_paths if cmd_list_paths else ['.']
+            for path in cmd_list_paths:
+                response, full_path = self.http_request('GET', path)
                 print(full_path, ':', sep='')
                 if response.reason == 'OK':
-                    for file_status in response.json()['FileStatuses']['FileStatus']:
-                        print('\t', file_status['pathSuffix'], sep='')
+                    for file in response.json()['FileStatuses']['FileStatus']:
+                        print('\t', file['pathSuffix'], sep='')
                 else:
                     print(response.reason)
         elif op == 'cd':
-            self._params['op'] = 'GETFILESTATUS'
-            if len(cmd_path.split()) == 1:
-                full_path = '/' + '/'.join(self.make_paths(cmd_path))
-                response = self.http_request('GET', full_path)
+            if len(cmd_list_paths) == 1:
+                self._params['op'] = 'GETFILESTATUS'
+                response, full_path = self.http_request('GET', cmd_list_paths[0])
                 if response.reason == 'OK':
                     if response.json()['FileStatus']['type'] == 'DIRECTORY':
                         self._hdfs_path = tuple(filter(None, full_path.split('/')))
@@ -83,15 +89,29 @@ class HDFSConsole:
                     print(response.reason)
             else:
                 print('The number of arguments is not one')
+        elif op == 'lls':
+            cmd_list_paths = cmd_list_paths if cmd_list_paths else ['.']
+            for path in cmd_list_paths:
+                print(path, ':', sep='')
+                if os.path.isdir(path):
+                    for block in os.listdir(path):
+                        print('\t', block, sep='')
+                else:
+                    print('\tPath not found or object not directory')
+        elif op == 'lcd':
+            if len(cmd_list_paths) == 1:
+                print(cmd_list_paths[0], ':', sep='')
+                if os.path.isdir(cmd_list_paths[0]):
+                    os.chdir(cmd_list_paths)
+                else:
+                    print('\tPath not found or object not directory')
+            else:
+                print('The number of arguments is not one')
         else:
             print('Command not found')
             return
 
-    def get_pwd(self):
-        return self._hdfs_path
-
 
 if __name__ == '__main__':
     hdfs_console = HDFSConsole(user='samat')
-    hdfs_console.operation_processing('cd', '/user/samat/dir1/')
-    # print(hdfs_console.get_pwd())
+    hdfs_console.command_processing('put', ['psql_help.txt', 'text1.txt'])
