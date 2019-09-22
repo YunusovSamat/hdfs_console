@@ -3,14 +3,20 @@ import requests
 
 
 class HDFSConsole:
-    def __init__(self, protocol='http', host='localhost',
-                 port='50070', user='dr.who'):
-        self._url = (protocol + '://' + host + ':' + port
-                     + '/webhdfs/v1')
-        self._user = user
+    def __init__(self):
+        self._url = ''
         self._hdfs_path = ['user', 'samat']
         os.chdir('/home/samat')
-        self._params = {'user.name': self._user, 'op': ''}
+        self._params = {'user.name': '', 'op': ''}
+
+    # def __init__(self, protocol='http', host='localhost',
+    #              port='50070', user='dr.who'):
+    #     self._url = (protocol + '://' + host + ':' + port
+    #                  + '/webhdfs/v1')
+    #     self._user = user
+    #     self._hdfs_path = ['user', 'samat']
+    #     os.chdir('/home/samat')
+    #     self._params = {'user.name': self._user, 'op': ''}
 
     def make_paths(self, path):
         full_list_path = list() if os.path.isabs(path) else self._hdfs_path[:]
@@ -127,7 +133,7 @@ class HDFSConsole:
                 response, full_path = self.http_request('GET', cmd_list_paths[0])
                 if response.reason == 'OK':
                     if response.json()['FileStatus']['type'] == 'DIRECTORY':
-                        self._hdfs_path = tuple(filter(None, full_path.split('/')))
+                        self._hdfs_path = list(filter(None, full_path.split('/')))
                         print(full_path)
                     else:
                         print("This is not directory")
@@ -146,11 +152,11 @@ class HDFSConsole:
                     print('\tNot found or object not directory')
         elif op == 'lcd':
             if len(cmd_list_paths) == 1:
-                print(cmd_list_paths[0], ':', sep='')
+                print(cmd_list_paths[0])
                 if os.path.isdir(cmd_list_paths[0]):
-                    os.chdir(cmd_list_paths)
+                    os.chdir(cmd_list_paths[0])
                 else:
-                    print('\tPath not found or object not directory')
+                    print('Path not found or object not directory')
             else:
                 print('The number of arguments is not one')
         elif op in ('exit', 'quit'):
@@ -159,7 +165,32 @@ class HDFSConsole:
             print('Command not found')
             return
 
+    def inf_cycle(self):
+        print('Welcome')
+        # while True:
+        #     data = input('Input host port user:\n>>> ')
+        #     if len(data.split()) == 3:
+        #         host, port, user = data.split()
+        #         self._url = 'http://' + host + ':' + port + '/webhdfs/v1'
+        #         self._params['user.name'] = user
+        #         self._params['op'] = 'LISTSTATUS'
+        #         try:
+        #             self.http_request('GET', '/')
+        #         except requests.ConnectionError:
+        #             print('Wrong host, port or user')
+        #         else:
+        #             print('Connect')
+        #             break
+        self._url = 'http://localhost:50070/webhdfs/v1'
+        self._params['user.name'] = 'samat'
+        while True:
+            cmd_str = input('>>> ')
+            cmd = cmd_str.partition(' ')[0]
+            paths = cmd_str.partition(' ')[2]
+            paths = list(filter(None, paths.split(' ')))
+            self.command_processing(cmd, paths)
+
 
 if __name__ == '__main__':
     hdfs_console = HDFSConsole()
-    hdfs_console.command_processing('get', [])
+    hdfs_console.inf_cycle()
